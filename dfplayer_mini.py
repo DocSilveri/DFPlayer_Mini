@@ -42,13 +42,13 @@ class DFPlayerMini:
         initializing the DFPlayerMini object.
         """
         self.uart = uart
-        self.uart.init(9600)
+        # self.uart.init(9600) # Human edit: needed to comment this out for the module to work when using pyserial
 
         print("Initializing DFPlayer... (May take 3~5 seconds)")
 
         self.send_cmd(0x00)  # Send command: Initialize the module
 
-        response = self.read_response()
+        response, data = self.read_response() # Humanedit: fixed
         if response == b'\x7E\xFF\x06\x00\x00\x00\xFE\xEF':
             print("DFPlayer Mini online.")
         else:
@@ -57,7 +57,7 @@ class DFPlayerMini:
 
         self.send_cmd(0x06, 0x00, 0x00)  # Send command: Set serial communication time out (500ms)
 
-        response = self.read_response()
+        response, data = self.read_response() # Humanedit: fixed
         if response == b'\x7E\xFF\x06\x00\x00\x00\xFE\xEF':
             print("DFPlayer time out set to 500ms.")
         else:
@@ -239,6 +239,32 @@ class DFPlayerMini:
         Parameters: 0x00
         """
         self.send_cmd(0x19, 0x00, 0x00)
+
+    def read_response(self): # Humanedit, this method was missing, asked to recreate it
+        """
+        Reads and parses the response from the DFPlayer module.
+
+        :return: The response code and any additional data received.
+        :rtype: tuple[int, bytes]
+        """
+        response = self.uart.read(10)  # Assuming the response will be no more than 10 bytes
+        if response:
+            # Parse the response
+            response_code = response[3]
+            data_length = response[5] - 2  # Subtract 2 for the command and checksum bytes
+            data = self.uart.read(data_length) if data_length > 0 else b''
+
+            # Read the checksum byte
+            checksum = self.uart.read(1)
+
+            # Verify the checksum
+            checksum_calc = sum(response[1:7]) + sum(data)
+            checksum_calc = (~checksum_calc) & 0xFF
+            if checksum_calc == int.from_bytes(checksum, byteorder='big'):
+                return response_code, data
+            else:
+                print("Checksum error in response!")
+        return None, None
 
     def read_state(self):
         """Read the current state of the DFPlayer Mini module.
